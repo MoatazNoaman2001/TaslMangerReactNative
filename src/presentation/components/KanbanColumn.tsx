@@ -1,6 +1,7 @@
-import React, { useCallback, useMemo } from 'react';
-import { FlatList, Pressable, StyleSheet, View, type ListRenderItemInfo } from 'react-native';
+import React, { useCallback, useMemo, useRef } from 'react';
+import { Alert, FlatList, Pressable, StyleSheet, View, type ListRenderItemInfo } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
 import { Text } from 'react-native-paper';
 
 import type { Task } from '@/domain/entities/Task';
@@ -139,16 +140,35 @@ function SwipeableTaskRow({
 }) {
   const theme = useTheme();
   const actions = useTaskActions();
+  const swipeRef = useRef<Swipeable>(null);
 
   const targets = useMemo(
     () => STATUS_ORDER.filter((nextStatus) => nextStatus !== task.status),
     [task.status],
   );
 
+  const handleDelete = useCallback(() => {
+    Alert.alert(
+      `Delete "${task.title}"?`,
+      'This task will be removed permanently.',
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => swipeRef.current?.close() },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            swipeRef.current?.close();
+            actions.remove(task.id);
+          },
+        },
+      ],
+    );
+  }, [actions, task.id, task.title]);
+
   const renderRightActions = useCallback(
     () => (
       <View style={styles.swipeActions}>
-        {targets.map((target, index) => {
+        {targets.map((target) => {
           const backgroundColor = getStatusActionColor(target, theme);
           const textColor =
             target === 'todo' ? theme.colors.text : theme.colors.textInverse;
@@ -163,7 +183,7 @@ function SwipeableTaskRow({
                 {
                   backgroundColor,
                   opacity: pressed ? 0.82 : 1,
-                  marginLeft: index === 0 ? 0 : theme.spacing.xs,
+                  marginLeft: theme.spacing.xs,
                   borderRadius: theme.radius.md,
                 },
               ]}
@@ -184,13 +204,43 @@ function SwipeableTaskRow({
             </Pressable>
           );
         })}
+        <Pressable
+          accessibilityRole="button"
+          onPress={handleDelete}
+          style={({ pressed }) => [
+            styles.swipeAction,
+            {
+              backgroundColor: theme.colors.danger,
+              opacity: pressed ? 0.82 : 1,
+              marginLeft: theme.spacing.xs,
+              borderRadius: theme.radius.md,
+            },
+          ]}
+        >
+          <Ionicons name="trash-outline" size={18} color={theme.colors.textInverse} />
+          <Text
+            style={[
+              styles.swipeActionText,
+              {
+                color: theme.colors.textInverse,
+                fontSize: theme.typography.small.fontSize,
+                fontWeight: '700',
+                lineHeight: theme.typography.small.lineHeight,
+                marginTop: 2,
+              },
+            ]}
+          >
+            Delete
+          </Text>
+        </Pressable>
       </View>
     ),
-    [actions, targets, task.id, theme],
+    [actions, handleDelete, targets, task.id, theme],
   );
 
   return (
     <Swipeable
+      ref={swipeRef}
       friction={2}
       overshootRight={false}
       renderRightActions={renderRightActions}

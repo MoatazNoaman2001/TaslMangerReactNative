@@ -80,22 +80,25 @@ export default function SettingsScreen() {
 
         <Animated.View
           entering={FadeInDown.delay(60).duration(380).springify().damping(18)}
-          style={[
-            styles.card,
-            {
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.border,
-              borderRadius: theme.radius.xxl,
-              marginTop: theme.spacing.lg,
-            },
-          ]}
+          style={{ marginTop: theme.spacing.lg }}
         >
-          <Text style={[styles.label, { color: theme.colors.textTertiary }]}>Overview</Text>
-          <View style={styles.statRow}>
-            <Stat label="Projects" value={stats.projects} theme={theme} />
-            <Stat label="Tasks" value={stats.tasks} theme={theme} />
-            <Stat label="Done" value={stats.done} theme={theme} accent={theme.colors.success} />
-            <Stat label="Overdue" value={stats.overdue} theme={theme} accent={stats.overdue > 0 ? theme.colors.danger : undefined} />
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                borderRadius: theme.radius.xxl,
+              },
+            ]}
+          >
+            <Text style={[styles.label, { color: theme.colors.textTertiary }]}>Overview</Text>
+            <View style={styles.statRow}>
+              <Stat label="Projects" value={stats.projects} theme={theme} />
+              <Stat label="Tasks" value={stats.tasks} theme={theme} />
+              <Stat label="Done" value={stats.done} theme={theme} accent={theme.colors.success} />
+              <Stat label="Overdue" value={stats.overdue} theme={theme} accent={stats.overdue > 0 ? theme.colors.danger : undefined} />
+            </View>
           </View>
         </Animated.View>
 
@@ -199,27 +202,30 @@ function Section({
   return (
     <Animated.View
       entering={FadeInDown.delay(delay).duration(380).springify().damping(18)}
-      style={[
-        styles.card,
-        {
-          backgroundColor: theme.colors.surface,
-          borderColor: theme.colors.border,
-          borderRadius: theme.radius.xxl,
-          marginTop: theme.spacing.md,
-        },
-      ]}
+      style={{ marginTop: theme.spacing.md }}
     >
-      <Text
-        style={{
-          color: theme.colors.text,
-          fontSize: theme.typography.h3.fontSize,
-          fontWeight: '700',
-          marginBottom: theme.spacing.md,
-        }}
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.border,
+            borderRadius: theme.radius.xxl,
+          },
+        ]}
       >
-        {title}
-      </Text>
-      {children}
+        <Text
+          style={{
+            color: theme.colors.text,
+            fontSize: theme.typography.h3.fontSize,
+            fontWeight: '700',
+            marginBottom: theme.spacing.md,
+          }}
+        >
+          {title}
+        </Text>
+        {children}
+      </View>
     </Animated.View>
   );
 }
@@ -298,9 +304,13 @@ const styles = StyleSheet.create({
   statRow: {
     flexDirection: 'row',
     marginTop: 12,
+    alignContent: 'center',
+    alignSelf: 'center',
   },
   stat: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   segment: {
     flexDirection: 'row',

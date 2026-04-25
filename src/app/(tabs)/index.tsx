@@ -1,8 +1,16 @@
-import { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { useState, useMemo, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  TextInput as RNTextInput,
+} from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import {
   List,
   FAB,
@@ -17,8 +25,11 @@ import { useProjectActions } from '@/presentation/hooks/useProjectActions';
 import { useTaskCache } from '@/data/persistence/MmkvTaskRepository';
 import { useTheme } from '@/presentation/theme/ThemeProvider';
 import type { Project } from '@/domain/entities/Project';
+import type { Task } from '@/domain/entities/Task';
+import type { Theme } from '@/presentation/theme/tokens';
 import { PROJECT_COLORS } from '@/domain/use-cases/projects/CreateProject';
 import { ColorSwatchPicker } from '@/presentation/components/ColorSwatchPicker';
+import { SwipeToDelete } from '@/presentation/components/SwipeToDelete';
 import { useKeyboardHeight } from '@/presentation/hooks/useKeyboardHeight';
 
 interface ProjectStats {
@@ -33,11 +44,14 @@ export default function ProjectsScreen() {
   const projects = useProjects();
   const actions = useProjectActions();
   const keyboardHeight = useKeyboardHeight();
-  const dialogStyle = {
-    backgroundColor: theme.colors.surfaceElevated,
-    borderRadius: theme.radius.lg,
-    transform: [{ translateY: -keyboardHeight / 2 }],
-  };
+  const dialogStyle = useMemo(
+    () => ({
+      backgroundColor: theme.colors.surfaceElevated,
+      borderRadius: theme.radius.lg,
+      transform: [{ translateY: -keyboardHeight / 2 }],
+    }),
+    [theme.colors.surfaceElevated, theme.radius.lg, keyboardHeight],
+  );
 
   const allTasks = useTaskCache((s) => s.tasks);
   const stats = useMemo(() => {
@@ -82,59 +96,100 @@ export default function ProjectsScreen() {
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const trimmedQuery = query.trim();
+  const isSearching = trimmedQuery.length > 0;
+
+  const inProgressTasks = useMemo(
+    () =>
+      allTasks
+        .filter((t) => t.status === 'in_progress')
+        .sort((a, b) => (a.dueDate ?? Number.POSITIVE_INFINITY) - (b.dueDate ?? Number.POSITIVE_INFINITY)),
+    [allTasks],
+  );
+
+  const doneTasks = useMemo(
+    () =>
+      allTasks
+        .filter((t) => t.status === 'done')
+        .sort((a, b) => (b.completedAt ?? b.updatedAt ?? 0) - (a.completedAt ?? a.updatedAt ?? 0)),
+    [allTasks],
+  );
+
+  const notifications = useMemo(() => {
+    const now = Date.now();
+    const inOneHour = now + 60 * 60 * 1000;
+    return allTasks
+      .filter((t) => t.status !== 'done' && t.dueDate != null && t.dueDate < inOneHour)
+      .sort((a, b) => (a.dueDate ?? 0) - (b.dueDate ?? 0));
+  }, [allTasks]);
 
   const filteredProjects = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = trimmedQuery.toLowerCase();
     if (!q) return projects;
     return projects.filter((p) => p.name.toLowerCase().includes(q));
-  }, [projects, query]);
+  }, [projects, trimmedQuery]);
+
+  const filteredTasks = useMemo(() => {
+    const q = trimmedQuery.toLowerCase();
+    if (!q) return [] as Task[];
+    return allTasks
+      .filter(
+        (t) =>
+          t.title.toLowerCase().includes(q) ||
+          (t.description ?? '').toLowerCase().includes(q) ||
+          t.subtasks.some((s) => s.title.toLowerCase().includes(q)),
+      )
+      .sort((a, b) => (a.dueDate ?? Number.POSITIVE_INFINITY) - (b.dueDate ?? Number.POSITIVE_INFINITY));
+  }, [allTasks, trimmedQuery]);
 
   const filteredTodayTasks = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = trimmedQuery.toLowerCase();
     if (!q) return totals.todayTasks;
     return totals.todayTasks.filter((t) => t.title.toLowerCase().includes(q));
-  }, [totals.todayTasks, query]);
+  }, [totals.todayTasks, trimmedQuery]);
+
+  const [taskListSheet, setTaskListSheet] = useState<{
+    open: boolean;
+    title: string;
+    tasks: Task[];
+    emptyMsg: string;
+  }>({ open: false, title: '', tasks: [], emptyMsg: '' });
+
+  const openTaskList = (title: string, tasks: Task[], emptyMsg: string) => {
+    setTaskListSheet({ open: true, title, tasks, emptyMsg });
+  };
+
+  const closeTaskList = () => setTaskListSheet((s) => ({ ...s, open: false }));
 
   // Dialog states
   const [createVisible, setCreateVisible] = useState(false);
-  const [newName, setNewName] = useState('');
-  
   const [menuVisible, setMenuVisible] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  
   const [renameVisible, setRenameVisible] = useState(false);
-  const [renameValue, setRenameValue] = useState('');
-  const [newColor, setNewColor] = useState(PROJECT_COLORS[0]!);
-  const [editColor, setEditColor] = useState(PROJECT_COLORS[0]!);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
-  const paperTheme = {
-    colors: {
-      surface: theme.colors.surface,
-      onSurface: theme.colors.text,
-      onSurfaceVariant: theme.colors.textSecondary,
-      primary: theme.colors.primary,
-      outline: theme.colors.border,
-      background: theme.colors.background,
-      text: theme.colors.text,
-      placeholder: theme.colors.textTertiary,
-      error: theme.colors.danger,
-    },
-  };
+  const initialNewProjectColor = useMemo(
+    () => PROJECT_COLORS[projects.length % PROJECT_COLORS.length]!,
+    [projects.length],
+  );
 
-  const handleCreate = () => {
-    const trimmed = newName.trim();
-    if (trimmed) {
-      actions.create(trimmed, newColor);
-      setNewName('');
-      setNewColor(PROJECT_COLORS[0]!);
-      setCreateVisible(false);
-    }
-  };
+  const paperTheme = useMemo(
+    () => ({
+      colors: {
+        surface: theme.colors.surface,
+        onSurface: theme.colors.text,
+        onSurfaceVariant: theme.colors.textSecondary,
+        primary: theme.colors.primary,
+        outline: theme.colors.border,
+        background: theme.colors.background,
+        text: theme.colors.text,
+        placeholder: theme.colors.textTertiary,
+        error: theme.colors.danger,
+      },
+    }),
+    [theme],
+  );
 
-  const openCreate = () => {
-    setNewColor(PROJECT_COLORS[projects.length % PROJECT_COLORS.length]!);
-    setCreateVisible(true);
-  };
+  const openCreate = () => setCreateVisible(true);
 
   const handleOpenMenu = (project: Project) => {
     setSelectedProject(project);
@@ -143,24 +198,9 @@ export default function ProjectsScreen() {
 
   const handleRenamePress = () => {
     if (selectedProject) {
-      setRenameValue(selectedProject.name);
-      setEditColor(selectedProject.color);
       setMenuVisible(false);
       setRenameVisible(true);
     }
-  };
-
-  const handleRename = () => {
-    if (!selectedProject) return;
-    const trimmed = renameValue.trim();
-    const patch: { name?: string; color?: string } = {};
-    if (trimmed && trimmed !== selectedProject.name) patch.name = trimmed;
-    if (editColor !== selectedProject.color) patch.color = editColor;
-    if (patch.name != null || patch.color != null) {
-      actions.update(selectedProject.id, patch);
-    }
-    setRenameVisible(false);
-    setSelectedProject(null);
   };
 
   const handleDelete = () => {
@@ -184,9 +224,9 @@ export default function ProjectsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.greetingRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: 18, fontWeight: '500' }}>
-              Hello
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: 13, fontWeight: '500' }}>
+              {todayLabel()}
             </Text>
             <Text
               style={{
@@ -196,51 +236,308 @@ export default function ProjectsScreen() {
                 marginTop: 2,
               }}
             >
-              Your projects
+              Hello there
             </Text>
+          </View>
+          <View style={styles.headerIcons}>
+            <HeaderIconButton
+              icon={searchOpen ? 'close' : 'search'}
+              onPress={() => {
+                setSearchOpen((v) => !v);
+                if (searchOpen) setQuery('');
+              }}
+              theme={theme}
+            />
+            <HeaderIconButton
+              icon="notifications-outline"
+              badge={notifications.length}
+              onPress={() =>
+                openTaskList(
+                  'Notifications',
+                  notifications,
+                  "You're all caught up!",
+                )
+              }
+              theme={theme}
+            />
           </View>
         </View>
 
-        {projects.length > 0 ? (
-          <View
+        {searchOpen ? (
+          <Animated.View
+            entering={FadeInDown.duration(220)}
             style={[
-              styles.summaryCard,
+              styles.searchBox,
               {
-                backgroundColor: theme.colors.primaryMuted,
-                borderRadius: theme.radius.xxl,
-                padding: theme.spacing.lg,
-                marginTop: theme.spacing.lg,
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                borderRadius: theme.radius.lg,
+                marginTop: theme.spacing.md,
               },
             ]}
           >
-            <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 13 }}>
-              Today's overview
-            </Text>
-            <Text
+            <Ionicons name="search" size={18} color={theme.colors.textTertiary} />
+            <RNTextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search projects and tasks"
+              placeholderTextColor={theme.colors.textTertiary}
               style={{
+                flex: 1,
+                marginLeft: 8,
                 color: theme.colors.text,
-                fontSize: 22,
-                fontWeight: '700',
-                marginTop: 6,
-                lineHeight: 28,
+                fontSize: 14,
+                paddingVertical: 0,
+              }}
+              autoFocus
+            />
+          </Animated.View>
+        ) : null}
+
+        <Animated.View
+          entering={FadeInDown.delay(60).duration(380).springify().damping(18)}
+          style={{ marginTop: theme.spacing.lg }}
+        >
+        <View
+          style={[
+            styles.heroCard,
+            {
+              backgroundColor: theme.colors.primaryMuted,
+              borderRadius: theme.radius.xxl,
+            },
+          ]}
+        >
+          <View style={styles.heroTop}>
+            <View style={[styles.heroDateChip, { backgroundColor: theme.colors.primary }]}>
+              <Ionicons name="calendar" size={13} color={theme.colors.textInverse} />
+              <Text
+                style={{
+                  color: theme.colors.textInverse,
+                  fontSize: 12,
+                  fontWeight: '700',
+                  marginLeft: 6,
+                }}
+              >
+                {shortDate(Date.now())}
+              </Text>
+            </View>
+            {totals.overdue > 0 ? (
+              <View style={[styles.urgentChip, { backgroundColor: theme.colors.danger }]}>
+                <Ionicons name="alert-circle" size={13} color={theme.colors.textInverse} />
+                <Text
+                  style={{
+                    color: theme.colors.textInverse,
+                    fontSize: 12,
+                    fontWeight: '700',
+                    marginLeft: 4,
+                  }}
+                >
+                  {totals.overdue} overdue
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <Text
+            style={{
+              color: theme.colors.text,
+              fontSize: 26,
+              fontWeight: '800',
+              marginTop: 14,
+              lineHeight: 32,
+            }}
+          >
+            {totals.todayTasks.length === 0
+              ? 'Nothing due today'
+              : `${totals.todayTasks.length} task${totals.todayTasks.length === 1 ? '' : 's'} for today`}
+          </Text>
+          <Text
+            style={{
+              color: theme.colors.textSecondary,
+              fontSize: 13,
+              marginTop: 4,
+            }}
+          >
+            {totals.all === 0
+              ? 'Create a project to get started'
+              : `${totals.done} of ${totals.all} done overall`}
+          </Text>
+          <View style={{ marginTop: theme.spacing.md }}>
+            <ProgressBar
+              progress={completionRatio}
+              color={theme.colors.primary}
+              style={{
+                height: 8,
+                borderRadius: theme.radius.round,
+                backgroundColor: theme.colors.surface,
+              }}
+            />
+          </View>
+        </View>
+        </Animated.View>
+
+        <Animated.View
+          entering={FadeInDown.delay(120).duration(380).springify().damping(18)}
+          style={styles.statsRow}
+        >
+          <StatCard
+            theme={theme}
+            icon="time-outline"
+            label="In progress"
+            value={`${totals.inProgress}`}
+            caption={`${Math.max(0, totals.all - totals.done - totals.inProgress)} to start`}
+            accent={theme.colors.priorityMedium}
+            onPress={() =>
+              openTaskList('In progress', inProgressTasks, 'No tasks in progress')
+            }
+          />
+          <StatCard
+            theme={theme}
+            icon="trophy-outline"
+            label="Completed"
+            value={`${Math.round(completionRatio * 100)}%`}
+            caption={`${totals.done}/${totals.all} done`}
+            accent={theme.colors.success}
+            onPress={() => openTaskList('Completed', doneTasks, 'No completed tasks yet')}
+          />
+        </Animated.View>
+
+        {isSearching ? (
+          <Animated.View
+            entering={FadeInDown.duration(220)}
+            style={{ marginTop: theme.spacing.lg }}
+          >
+            <View style={styles.sectionHeader}>
+              <Text
+                style={{
+                  color: theme.colors.text,
+                  fontSize: theme.typography.h3.fontSize,
+                  fontWeight: '700',
+                }}
+              >
+                Tasks
+              </Text>
+              <Text style={{ color: theme.colors.textTertiary, fontSize: 13, fontWeight: '600' }}>
+                {filteredTasks.length}
+              </Text>
+            </View>
+            {filteredTasks.length === 0 ? (
+              <Text
+                style={{
+                  color: theme.colors.textTertiary,
+                  textAlign: 'center',
+                  paddingVertical: 16,
+                  fontSize: 13,
+                }}
+              >
+                No tasks match "{trimmedQuery}"
+              </Text>
+            ) : (
+              <View
+                style={{
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderRadius: theme.radius.xxl,
+                  marginTop: theme.spacing.sm,
+                  overflow: 'hidden',
+                }}
+              >
+                {filteredTasks.slice(0, 8).map((t, i) => (
+                  <TaskRow
+                    key={t.id}
+                    task={t}
+                    theme={theme}
+                    isLast={i === Math.min(filteredTasks.length, 8) - 1}
+                    onPress={() => router.push(`/task/${t.id}`)}
+                  />
+                ))}
+              </View>
+            )}
+          </Animated.View>
+        ) : null}
+
+        {!isSearching && filteredTodayTasks.length > 0 ? (
+          <Animated.View
+            entering={FadeInDown.delay(180).duration(380).springify().damping(18)}
+            style={{ marginTop: theme.spacing.lg }}
+          >
+            <View style={styles.sectionHeader}>
+              <Text
+                style={{
+                  color: theme.colors.text,
+                  fontSize: theme.typography.h3.fontSize,
+                  fontWeight: '700',
+                }}
+              >
+                Today
+              </Text>
+              <Text style={{ color: theme.colors.textTertiary, fontSize: 13, fontWeight: '600' }}>
+                {filteredTodayTasks.length}
+              </Text>
+            </View>
+            <View
+              style={{
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderRadius: theme.radius.xxl,
+                marginTop: theme.spacing.sm,
+                overflow: 'hidden',
               }}
             >
-              {totals.all === 0
-                ? 'No tasks yet'
-                : `You completed ${totals.done} of ${totals.all} tasks`}
-            </Text>
-            <View style={{ marginTop: theme.spacing.md }}>
-              <ProgressBar
-                progress={completionRatio}
-                color={theme.colors.primary}
-                style={{
-                  height: 8,
-                  borderRadius: theme.radius.round,
-                  backgroundColor: theme.colors.surfaceElevated,
-                }}
-              />
+              {filteredTodayTasks.slice(0, 5).map((t, i) => (
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  theme={theme}
+                  isLast={i === Math.min(filteredTodayTasks.length, 5) - 1}
+                  onPress={() => router.push(`/task/${t.id}`)}
+                />
+              ))}
             </View>
-          </View>
+          </Animated.View>
+        ) : null}
+
+        {!isSearching && totals.priorityTasks.length > 0 ? (
+          <Animated.View
+            entering={FadeInDown.delay(220).duration(380).springify().damping(18)}
+            style={{ marginTop: theme.spacing.lg }}
+          >
+            <View style={styles.sectionHeader}>
+              <Text
+                style={{
+                  color: theme.colors.text,
+                  fontSize: theme.typography.h3.fontSize,
+                  fontWeight: '700',
+                }}
+              >
+                High priority
+              </Text>
+              <Text style={{ color: theme.colors.textTertiary, fontSize: 13, fontWeight: '600' }}>
+                {totals.priorityTasks.length}
+              </Text>
+            </View>
+            <View
+              style={{
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderRadius: theme.radius.xxl,
+                marginTop: theme.spacing.sm,
+                overflow: 'hidden',
+              }}
+            >
+              {totals.priorityTasks.map((t, i) => (
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  theme={theme}
+                  isLast={i === totals.priorityTasks.length - 1}
+                  onPress={() => router.push(`/task/${t.id}`)}
+                />
+              ))}
+            </View>
+          </Animated.View>
         ) : null}
 
         {projects.length === 0 ? (
@@ -254,121 +551,187 @@ export default function ProjectsScreen() {
           </View>
         ) : (
           <View style={{ marginTop: theme.spacing.lg }}>
-            {projects.map((project, idx) => {
-              const s = stats[project.id] ?? { total: 0, done: 0, overdue: 0 };
-              const ratio = s.total > 0 ? s.done / s.total : 0;
-              return (
-                <Animated.View
-                  key={project.id}
-                  entering={FadeInDown.delay(60 * idx).duration(380).springify().damping(18)}
+            <View style={styles.sectionHeader}>
+              <Text
+                style={{
+                  color: theme.colors.text,
+                  fontSize: theme.typography.h3.fontSize,
+                  fontWeight: '700',
+                }}
+              >
+                Projects
+              </Text>
+              <Text style={{ color: theme.colors.textTertiary, fontSize: 13, fontWeight: '600' }}>
+                {filteredProjects.length}
+              </Text>
+            </View>
+            <View style={{ marginTop: theme.spacing.sm }}>
+              {filteredProjects.length === 0 ? (
+                <Text
+                  style={{
+                    color: theme.colors.textTertiary,
+                    textAlign: 'center',
+                    paddingVertical: 24,
+                    fontSize: 13,
+                  }}
                 >
-                <Pressable
-                  onPress={() => router.push(`/project/${project.id}`)}
-                  onLongPress={() => handleOpenMenu(project)}
-                  style={({ pressed }) => [
-                    {
-                      backgroundColor: theme.colors.surface,
-                      borderColor: theme.colors.border,
-                      borderRadius: theme.radius.xxl,
-                      borderWidth: StyleSheet.hairlineWidth,
-                      padding: theme.spacing.lg,
-                      marginBottom: theme.spacing.md,
-                      opacity: pressed ? 0.85 : 1,
-                      transform: [{ scale: pressed ? 0.985 : 1 }],
-                    },
-                  ]}
-                >
-                  <View style={styles.cardHeader}>
-                    <View
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 12,
-                        backgroundColor: project.color,
-                      }}
-                    />
-                    <View style={{ flex: 1, marginLeft: theme.spacing.md, minWidth: 0 }}>
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          color: theme.colors.text,
-                          fontSize: theme.typography.h3.fontSize,
-                          fontWeight: '700',
-                        }}
-                      >
-                        {project.name}
-                      </Text>
-                      <Text
-                        style={{
-                          color: theme.colors.textSecondary,
-                          fontSize: 13,
-                          marginTop: 2,
-                        }}
-                      >
-                        {s.total === 0
-                          ? 'No tasks yet'
-                          : `${s.done}/${s.total} done${s.overdue > 0 ? ` · ${s.overdue} overdue` : ''}`}
-                      </Text>
-                    </View>
-                    <Text
-                      style={{
-                        color: theme.colors.textTertiary,
-                        fontSize: 13,
-                        fontWeight: '700',
-                      }}
+                  No projects match "{query}"
+                </Text>
+              ) : (
+                filteredProjects.map((project, idx) => {
+                  const s = stats[project.id] ?? { total: 0, done: 0, overdue: 0 };
+                  const ratio = s.total > 0 ? s.done / s.total : 0;
+                  return (
+                    <Animated.View
+                      key={project.id}
+                      entering={FadeInDown.delay(60 * idx).duration(380).springify().damping(18)}
+                      style={{ marginBottom: theme.spacing.md }}
                     >
-                      {Math.round(ratio * 100)}%
-                    </Text>
-                  </View>
-                  <ProgressBar
-                    progress={ratio}
-                    color={s.overdue > 0 ? theme.colors.danger : theme.colors.priorityMedium}
-                    style={{
-                      height: 6,
-                      borderRadius: theme.radius.round,
-                      backgroundColor: theme.colors.border,
-                      marginTop: theme.spacing.md,
-                    }}
-                  />
-                </Pressable>
-                </Animated.View>
-              );
-            })}
+                      <SwipeToDelete
+                        theme={theme}
+                        onDelete={() => actions.remove(project.id)}
+                        confirmTitle={`Delete "${project.name}"?`}
+                        confirmMessage="All tasks in this project will be removed. This cannot be undone."
+                        buttonRadius={theme.radius.xxl}
+                      >
+                      <Pressable
+                        onPress={() => router.push(`/project/${project.id}`)}
+                        onLongPress={() => handleOpenMenu(project)}
+                        style={({ pressed }) => [
+                          {
+                            backgroundColor: theme.colors.surface,
+                            borderColor: theme.colors.border,
+                            borderRadius: theme.radius.xxl,
+                            borderWidth: StyleSheet.hairlineWidth,
+                            padding: theme.spacing.lg,
+                            opacity: pressed ? 0.85 : 1,
+                            transform: [{ scale: pressed ? 0.985 : 1 }],
+                          },
+                        ]}
+                      >
+                        <View style={styles.cardHeader}>
+                          <View
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 12,
+                              backgroundColor: project.color,
+                            }}
+                          />
+                          <View style={{ flex: 1, marginLeft: theme.spacing.md, minWidth: 0 }}>
+                            <Text
+                              numberOfLines={1}
+                              style={{
+                                color: theme.colors.text,
+                                fontSize: theme.typography.h3.fontSize,
+                                fontWeight: '700',
+                              }}
+                            >
+                              {project.name}
+                            </Text>
+                            <Text
+                              style={{
+                                color: theme.colors.textSecondary,
+                                fontSize: 13,
+                                marginTop: 2,
+                              }}
+                            >
+                              {s.total === 0
+                                ? 'No tasks yet'
+                                : `${s.done}/${s.total} done${s.overdue > 0 ? ` · ${s.overdue} overdue` : ''}`}
+                            </Text>
+                          </View>
+                          <Text
+                            style={{
+                              color: theme.colors.textTertiary,
+                              fontSize: 13,
+                              fontWeight: '700',
+                            }}
+                          >
+                            {Math.round(ratio * 100)}%
+                          </Text>
+                        </View>
+                        <ProgressBar
+                          progress={ratio}
+                          color={s.overdue > 0 ? theme.colors.danger : theme.colors.priorityMedium}
+                          style={{
+                            height: 6,
+                            borderRadius: theme.radius.round,
+                            backgroundColor: theme.colors.border,
+                            marginTop: theme.spacing.md,
+                          }}
+                        />
+                      </Pressable>
+                      </SwipeToDelete>
+                    </Animated.View>
+                  );
+                })
+              )}
+            </View>
           </View>
         )}
       </ScrollView>
 
       <Portal>
-        {/* Create Project Dialog */}
         <Dialog
-          visible={createVisible}
-          onDismiss={() => setCreateVisible(false)}
+          visible={taskListSheet.open}
+          onDismiss={closeTaskList}
           style={dialogStyle}
         >
-          <Dialog.Title style={{ color: theme.colors.text }}>New Project</Dialog.Title>
-          <Dialog.Content>
-            <TextInput
-              label="Project Name"
-              value={newName}
-              onChangeText={setNewName}
-              mode="outlined"
-              theme={paperTheme}
-              autoFocus
-            />
-            <Text style={{ color: theme.colors.textSecondary, marginTop: 16, marginBottom: 8, fontSize: 13, fontWeight: '600' }}>
-              Color
-            </Text>
-            <ColorSwatchPicker colors={PROJECT_COLORS} value={newColor} onChange={setNewColor} />
+          <Dialog.Title style={{ color: theme.colors.text }}>
+            {taskListSheet.tasks.length > 0
+              ? `${taskListSheet.title} · ${taskListSheet.tasks.length}`
+              : taskListSheet.title}
+          </Dialog.Title>
+          <Dialog.Content style={{ paddingHorizontal: 0 }}>
+            {taskListSheet.tasks.length === 0 ? (
+              <Text
+                style={{
+                  color: theme.colors.textTertiary,
+                  paddingHorizontal: 24,
+                  paddingVertical: 24,
+                  textAlign: 'center',
+                  fontSize: 14,
+                }}
+              >
+                {taskListSheet.emptyMsg}
+              </Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 380 }}>
+                {taskListSheet.tasks.map((t, i) => (
+                  <TaskRow
+                    key={t.id}
+                    task={t}
+                    theme={theme}
+                    isLast={i === taskListSheet.tasks.length - 1}
+                    onPress={() => {
+                      closeTaskList();
+                      router.push(`/task/${t.id}`);
+                    }}
+                  />
+                ))}
+              </ScrollView>
+            )}
           </Dialog.Content>
           <Dialog.Actions>
-            <Button textColor={theme.colors.textSecondary} onPress={() => setCreateVisible(false)}>
-              Cancel
-            </Button>
-            <Button textColor={theme.colors.primary} onPress={handleCreate}>
-              Create
+            <Button textColor={theme.colors.primary} onPress={closeTaskList}>
+              Close
             </Button>
           </Dialog.Actions>
         </Dialog>
+
+        <CreateProjectDialog
+          visible={createVisible}
+          initialColor={initialNewProjectColor}
+          theme={theme}
+          dialogStyle={dialogStyle}
+          paperTheme={paperTheme}
+          onDismiss={() => setCreateVisible(false)}
+          onCreate={(name, color) => {
+            actions.create(name, color);
+            setCreateVisible(false);
+          }}
+        />
 
         {/* Long Press Action Sheet (Menu) Dialog */}
         <Dialog
@@ -397,36 +760,22 @@ export default function ProjectsScreen() {
           </Dialog.Content>
         </Dialog>
 
-        {/* Rename Dialog */}
-        <Dialog
+        <EditProjectDialog
           visible={renameVisible}
-          onDismiss={() => setRenameVisible(false)}
-          style={dialogStyle}
-        >
-          <Dialog.Title style={{ color: theme.colors.text }}>Edit Project</Dialog.Title>
-          <Dialog.Content>
-            <TextInput
-              label="Project Name"
-              value={renameValue}
-              onChangeText={setRenameValue}
-              mode="outlined"
-              theme={paperTheme}
-              autoFocus
-            />
-            <Text style={{ color: theme.colors.textSecondary, marginTop: 16, marginBottom: 8, fontSize: 13, fontWeight: '600' }}>
-              Color
-            </Text>
-            <ColorSwatchPicker colors={PROJECT_COLORS} value={editColor} onChange={setEditColor} />
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button textColor={theme.colors.textSecondary} onPress={() => setRenameVisible(false)}>
-              Cancel
-            </Button>
-            <Button textColor={theme.colors.primary} onPress={handleRename}>
-              Save
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
+          project={selectedProject}
+          theme={theme}
+          dialogStyle={dialogStyle}
+          paperTheme={paperTheme}
+          onDismiss={() => {
+            setRenameVisible(false);
+            setSelectedProject(null);
+          }}
+          onSave={(id, patch) => {
+            actions.update(id, patch);
+            setRenameVisible(false);
+            setSelectedProject(null);
+          }}
+        />
       </Portal>
 
       <FAB
@@ -440,6 +789,372 @@ export default function ProjectsScreen() {
   );
 }
 
+type DialogStyleProp = {
+  backgroundColor: string;
+  borderRadius: number;
+  transform: { translateY: number }[];
+};
+type PaperThemeProp = { colors: Record<string, string> };
+
+function CreateProjectDialog({
+  visible,
+  initialColor,
+  theme,
+  dialogStyle,
+  paperTheme,
+  onDismiss,
+  onCreate,
+}: {
+  visible: boolean;
+  initialColor: string;
+  theme: Theme;
+  dialogStyle: DialogStyleProp;
+  paperTheme: PaperThemeProp;
+  onDismiss: () => void;
+  onCreate: (name: string, color: string) => void;
+}) {
+  const [name, setName] = useState('');
+  const [color, setColor] = useState(initialColor);
+
+  useEffect(() => {
+    if (visible) {
+      setName('');
+      setColor(initialColor);
+    }
+  }, [visible, initialColor]);
+
+  const handleSubmit = () => {
+    const trimmed = name.trim();
+    if (trimmed) onCreate(trimmed, color);
+  };
+
+  return (
+    <Dialog visible={visible} onDismiss={onDismiss} style={dialogStyle}>
+      <Dialog.Title style={{ color: theme.colors.text }}>New Project</Dialog.Title>
+      <Dialog.Content>
+        <TextInput
+          label="Project Name"
+          value={name}
+          onChangeText={setName}
+          mode="outlined"
+          theme={paperTheme}
+          autoFocus
+        />
+        <Text
+          style={{
+            color: theme.colors.textSecondary,
+            marginTop: 16,
+            marginBottom: 8,
+            fontSize: 13,
+            fontWeight: '600',
+          }}
+        >
+          Color
+        </Text>
+        <ColorSwatchPicker colors={PROJECT_COLORS} value={color} onChange={setColor} />
+      </Dialog.Content>
+      <Dialog.Actions>
+        <Button textColor={theme.colors.textSecondary} onPress={onDismiss}>
+          Cancel
+        </Button>
+        <Button textColor={theme.colors.primary} onPress={handleSubmit}>
+          Create
+        </Button>
+      </Dialog.Actions>
+    </Dialog>
+  );
+}
+
+function EditProjectDialog({
+  visible,
+  project,
+  theme,
+  dialogStyle,
+  paperTheme,
+  onDismiss,
+  onSave,
+}: {
+  visible: boolean;
+  project: Project | null;
+  theme: Theme;
+  dialogStyle: DialogStyleProp;
+  paperTheme: PaperThemeProp;
+  onDismiss: () => void;
+  onSave: (id: string, patch: { name?: string; color?: string }) => void;
+}) {
+  const [name, setName] = useState('');
+  const [color, setColor] = useState(PROJECT_COLORS[0]!);
+
+  useEffect(() => {
+    if (visible && project) {
+      setName(project.name);
+      setColor(project.color);
+    }
+  }, [visible, project]);
+
+  const handleSubmit = () => {
+    if (!project) return;
+    const trimmed = name.trim();
+    const patch: { name?: string; color?: string } = {};
+    if (trimmed && trimmed !== project.name) patch.name = trimmed;
+    if (color !== project.color) patch.color = color;
+    if (patch.name != null || patch.color != null) {
+      onSave(project.id, patch);
+    } else {
+      onDismiss();
+    }
+  };
+
+  return (
+    <Dialog visible={visible} onDismiss={onDismiss} style={dialogStyle}>
+      <Dialog.Title style={{ color: theme.colors.text }}>Edit Project</Dialog.Title>
+      <Dialog.Content>
+        <TextInput
+          label="Project Name"
+          value={name}
+          onChangeText={setName}
+          mode="outlined"
+          theme={paperTheme}
+          autoFocus
+        />
+        <Text
+          style={{
+            color: theme.colors.textSecondary,
+            marginTop: 16,
+            marginBottom: 8,
+            fontSize: 13,
+            fontWeight: '600',
+          }}
+        >
+          Color
+        </Text>
+        <ColorSwatchPicker colors={PROJECT_COLORS} value={color} onChange={setColor} />
+      </Dialog.Content>
+      <Dialog.Actions>
+        <Button textColor={theme.colors.textSecondary} onPress={onDismiss}>
+          Cancel
+        </Button>
+        <Button textColor={theme.colors.primary} onPress={handleSubmit}>
+          Save
+        </Button>
+      </Dialog.Actions>
+    </Dialog>
+  );
+}
+
+function HeaderIconButton({
+  icon,
+  onPress,
+  badge,
+  theme,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  badge?: number;
+  theme: Theme;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        {
+          width: 40,
+          height: 40,
+          borderRadius: 20,
+          backgroundColor: theme.colors.surface,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: theme.colors.border,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginLeft: 8,
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <Ionicons name={icon} size={18} color={theme.colors.text} />
+      {badge != null && badge > 0 ? (
+        <View
+          style={{
+            position: 'absolute',
+            top: -2,
+            right: -2,
+            minWidth: 18,
+            height: 18,
+            borderRadius: 9,
+            backgroundColor: theme.colors.danger,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 4,
+            borderWidth: 2,
+            borderColor: theme.colors.background,
+          }}
+        >
+          <Text style={{ color: theme.colors.textInverse, fontSize: 10, fontWeight: '700' }}>
+            {badge > 9 ? '9+' : badge}
+          </Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function StatCard({
+  theme,
+  icon,
+  label,
+  value,
+  caption,
+  accent,
+  onPress,
+}: {
+  theme: Theme;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  caption?: string;
+  accent?: string;
+  onPress?: () => void;
+}) {
+  const tint = accent ?? theme.colors.primary;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => [
+        styles.statCard,
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border,
+          borderRadius: theme.radius.xxl,
+          opacity: pressed && onPress ? 0.7 : 1,
+          transform: [{ scale: pressed && onPress ? 0.98 : 1 }],
+        },
+      ]}
+    >
+      <View
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 16,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: tint + '24',
+        }}
+      >
+        <Ionicons name={icon} size={16} color={tint} />
+      </View>
+      <Text
+        style={{
+          color: theme.colors.text,
+          fontSize: 24,
+          fontWeight: '800',
+          marginTop: 12,
+        }}
+      >
+        {value}
+      </Text>
+      <Text
+        style={{
+          color: theme.colors.textSecondary,
+          fontSize: 13,
+          fontWeight: '600',
+          marginTop: 2,
+        }}
+      >
+        {label}
+      </Text>
+      {caption ? (
+        <Text style={{ color: theme.colors.textTertiary, fontSize: 11, marginTop: 2 }}>
+          {caption}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function TaskRow({
+  task,
+  theme,
+  isLast,
+  onPress,
+}: {
+  task: Task;
+  theme: Theme;
+  isLast: boolean;
+  onPress: () => void;
+}) {
+  const now = Date.now();
+  const isOverdue = task.dueDate != null && task.dueDate < now && task.status !== 'done';
+  const priorityColor =
+    task.priority === 'high'
+      ? theme.colors.priorityHigh
+      : task.priority === 'medium'
+      ? theme.colors.priorityMedium
+      : theme.colors.priorityLow;
+  const dueText = task.dueDate != null ? formatDue(task.dueDate, now) : null;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
+          borderBottomColor: theme.colors.border,
+          opacity: pressed ? 0.7 : 1,
+        },
+      ]}
+    >
+      <View style={{ width: 4, height: 32, borderRadius: 2, backgroundColor: priorityColor }} />
+      <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
+        <Text
+          numberOfLines={1}
+          style={{ color: theme.colors.text, fontSize: 14, fontWeight: '600' }}
+        >
+          {task.title}
+        </Text>
+        {dueText ? (
+          <Text
+            style={{
+              color: isOverdue ? theme.colors.danger : theme.colors.textTertiary,
+              fontSize: 12,
+              marginTop: 2,
+              fontWeight: '500',
+            }}
+          >
+            {dueText}
+          </Text>
+        ) : null}
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
+    </Pressable>
+  );
+}
+
+function todayLabel(): string {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function shortDate(ts: number): string {
+  return new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+function formatDue(ts: number, now: number): string {
+  const diffMin = Math.round((ts - now) / 60_000);
+  if (diffMin < -60 * 24) return `${Math.abs(Math.round(diffMin / (60 * 24)))}d late`;
+  if (diffMin < -60) return `${Math.abs(Math.round(diffMin / 60))}h late`;
+  if (diffMin < 0) return `${Math.abs(diffMin)}m late`;
+  if (diffMin < 60) return `In ${diffMin}m`;
+  if (diffMin < 60 * 24) return `In ${Math.round(diffMin / 60)}h`;
+  return shortDate(ts);
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -448,7 +1163,54 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  summaryCard: {},
+  headerIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  heroCard: {
+    padding: 18,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  heroDateChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  urgentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  statCard: {
+    flex: 1,
+    padding: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
