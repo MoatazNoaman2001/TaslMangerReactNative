@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,6 @@ import {
   List,
   FAB,
   Dialog,
-  TextInput,
   Button,
   Portal,
   ProgressBar,
@@ -26,11 +25,15 @@ import { useTaskCache } from '@/data/persistence/MmkvTaskRepository';
 import { useTheme } from '@/presentation/theme/ThemeProvider';
 import type { Project } from '@/domain/entities/Project';
 import type { Task } from '@/domain/entities/Task';
-import type { Theme } from '@/presentation/theme/tokens';
 import { PROJECT_COLORS } from '@/domain/use-cases/projects/CreateProject';
-import { ColorSwatchPicker } from '@/presentation/components/ColorSwatchPicker';
 import { SwipeToDelete } from '@/presentation/components/SwipeToDelete';
 import { useKeyboardHeight } from '@/presentation/hooks/useKeyboardHeight';
+import { CreateProjectDialog } from '@/presentation/components/dashboard/CreateProjectDialog';
+import { EditProjectDialog } from '@/presentation/components/dashboard/EditProjectDialog';
+import { HeaderIconButton } from '@/presentation/components/dashboard/HeaderIconButton';
+import { StatCard } from '@/presentation/components/dashboard/StatCard';
+import { TaskRow } from '@/presentation/components/dashboard/TaskRow';
+import { shortDate, todayLabel } from '@/presentation/components/dashboard/dateUtils';
 
 interface ProjectStats {
   total: number;
@@ -789,372 +792,6 @@ export default function ProjectsScreen() {
   );
 }
 
-type DialogStyleProp = {
-  backgroundColor: string;
-  borderRadius: number;
-  transform: { translateY: number }[];
-};
-type PaperThemeProp = { colors: Record<string, string> };
-
-function CreateProjectDialog({
-  visible,
-  initialColor,
-  theme,
-  dialogStyle,
-  paperTheme,
-  onDismiss,
-  onCreate,
-}: {
-  visible: boolean;
-  initialColor: string;
-  theme: Theme;
-  dialogStyle: DialogStyleProp;
-  paperTheme: PaperThemeProp;
-  onDismiss: () => void;
-  onCreate: (name: string, color: string) => void;
-}) {
-  const [name, setName] = useState('');
-  const [color, setColor] = useState(initialColor);
-
-  useEffect(() => {
-    if (visible) {
-      setName('');
-      setColor(initialColor);
-    }
-  }, [visible, initialColor]);
-
-  const handleSubmit = () => {
-    const trimmed = name.trim();
-    if (trimmed) onCreate(trimmed, color);
-  };
-
-  return (
-    <Dialog visible={visible} onDismiss={onDismiss} style={dialogStyle}>
-      <Dialog.Title style={{ color: theme.colors.text }}>New Project</Dialog.Title>
-      <Dialog.Content>
-        <TextInput
-          label="Project Name"
-          value={name}
-          onChangeText={setName}
-          mode="outlined"
-          theme={paperTheme}
-          autoFocus
-        />
-        <Text
-          style={{
-            color: theme.colors.textSecondary,
-            marginTop: 16,
-            marginBottom: 8,
-            fontSize: 13,
-            fontWeight: '600',
-          }}
-        >
-          Color
-        </Text>
-        <ColorSwatchPicker colors={PROJECT_COLORS} value={color} onChange={setColor} />
-      </Dialog.Content>
-      <Dialog.Actions>
-        <Button textColor={theme.colors.textSecondary} onPress={onDismiss}>
-          Cancel
-        </Button>
-        <Button textColor={theme.colors.primary} onPress={handleSubmit}>
-          Create
-        </Button>
-      </Dialog.Actions>
-    </Dialog>
-  );
-}
-
-function EditProjectDialog({
-  visible,
-  project,
-  theme,
-  dialogStyle,
-  paperTheme,
-  onDismiss,
-  onSave,
-}: {
-  visible: boolean;
-  project: Project | null;
-  theme: Theme;
-  dialogStyle: DialogStyleProp;
-  paperTheme: PaperThemeProp;
-  onDismiss: () => void;
-  onSave: (id: string, patch: { name?: string; color?: string }) => void;
-}) {
-  const [name, setName] = useState('');
-  const [color, setColor] = useState(PROJECT_COLORS[0]!);
-
-  useEffect(() => {
-    if (visible && project) {
-      setName(project.name);
-      setColor(project.color);
-    }
-  }, [visible, project]);
-
-  const handleSubmit = () => {
-    if (!project) return;
-    const trimmed = name.trim();
-    const patch: { name?: string; color?: string } = {};
-    if (trimmed && trimmed !== project.name) patch.name = trimmed;
-    if (color !== project.color) patch.color = color;
-    if (patch.name != null || patch.color != null) {
-      onSave(project.id, patch);
-    } else {
-      onDismiss();
-    }
-  };
-
-  return (
-    <Dialog visible={visible} onDismiss={onDismiss} style={dialogStyle}>
-      <Dialog.Title style={{ color: theme.colors.text }}>Edit Project</Dialog.Title>
-      <Dialog.Content>
-        <TextInput
-          label="Project Name"
-          value={name}
-          onChangeText={setName}
-          mode="outlined"
-          theme={paperTheme}
-          autoFocus
-        />
-        <Text
-          style={{
-            color: theme.colors.textSecondary,
-            marginTop: 16,
-            marginBottom: 8,
-            fontSize: 13,
-            fontWeight: '600',
-          }}
-        >
-          Color
-        </Text>
-        <ColorSwatchPicker colors={PROJECT_COLORS} value={color} onChange={setColor} />
-      </Dialog.Content>
-      <Dialog.Actions>
-        <Button textColor={theme.colors.textSecondary} onPress={onDismiss}>
-          Cancel
-        </Button>
-        <Button textColor={theme.colors.primary} onPress={handleSubmit}>
-          Save
-        </Button>
-      </Dialog.Actions>
-    </Dialog>
-  );
-}
-
-function HeaderIconButton({
-  icon,
-  onPress,
-  badge,
-  theme,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-  badge?: number;
-  theme: Theme;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        {
-          width: 40,
-          height: 40,
-          borderRadius: 20,
-          backgroundColor: theme.colors.surface,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: theme.colors.border,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginLeft: 8,
-          opacity: pressed ? 0.7 : 1,
-        },
-      ]}
-    >
-      <Ionicons name={icon} size={18} color={theme.colors.text} />
-      {badge != null && badge > 0 ? (
-        <View
-          style={{
-            position: 'absolute',
-            top: -2,
-            right: -2,
-            minWidth: 18,
-            height: 18,
-            borderRadius: 9,
-            backgroundColor: theme.colors.danger,
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingHorizontal: 4,
-            borderWidth: 2,
-            borderColor: theme.colors.background,
-          }}
-        >
-          <Text style={{ color: theme.colors.textInverse, fontSize: 10, fontWeight: '700' }}>
-            {badge > 9 ? '9+' : badge}
-          </Text>
-        </View>
-      ) : null}
-    </Pressable>
-  );
-}
-
-function StatCard({
-  theme,
-  icon,
-  label,
-  value,
-  caption,
-  accent,
-  onPress,
-}: {
-  theme: Theme;
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: string;
-  caption?: string;
-  accent?: string;
-  onPress?: () => void;
-}) {
-  const tint = accent ?? theme.colors.primary;
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      style={({ pressed }) => [
-        styles.statCard,
-        {
-          backgroundColor: theme.colors.surface,
-          borderColor: theme.colors.border,
-          borderRadius: theme.radius.xxl,
-          opacity: pressed && onPress ? 0.7 : 1,
-          transform: [{ scale: pressed && onPress ? 0.98 : 1 }],
-        },
-      ]}
-    >
-      <View
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: tint + '24',
-        }}
-      >
-        <Ionicons name={icon} size={16} color={tint} />
-      </View>
-      <Text
-        style={{
-          color: theme.colors.text,
-          fontSize: 24,
-          fontWeight: '800',
-          marginTop: 12,
-        }}
-      >
-        {value}
-      </Text>
-      <Text
-        style={{
-          color: theme.colors.textSecondary,
-          fontSize: 13,
-          fontWeight: '600',
-          marginTop: 2,
-        }}
-      >
-        {label}
-      </Text>
-      {caption ? (
-        <Text style={{ color: theme.colors.textTertiary, fontSize: 11, marginTop: 2 }}>
-          {caption}
-        </Text>
-      ) : null}
-    </Pressable>
-  );
-}
-
-function TaskRow({
-  task,
-  theme,
-  isLast,
-  onPress,
-}: {
-  task: Task;
-  theme: Theme;
-  isLast: boolean;
-  onPress: () => void;
-}) {
-  const now = Date.now();
-  const isOverdue = task.dueDate != null && task.dueDate < now && task.status !== 'done';
-  const priorityColor =
-    task.priority === 'high'
-      ? theme.colors.priorityHigh
-      : task.priority === 'medium'
-      ? theme.colors.priorityMedium
-      : theme.colors.priorityLow;
-  const dueText = task.dueDate != null ? formatDue(task.dueDate, now) : null;
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        {
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
-          borderBottomColor: theme.colors.border,
-          opacity: pressed ? 0.7 : 1,
-        },
-      ]}
-    >
-      <View style={{ width: 4, height: 32, borderRadius: 2, backgroundColor: priorityColor }} />
-      <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
-        <Text
-          numberOfLines={1}
-          style={{ color: theme.colors.text, fontSize: 14, fontWeight: '600' }}
-        >
-          {task.title}
-        </Text>
-        {dueText ? (
-          <Text
-            style={{
-              color: isOverdue ? theme.colors.danger : theme.colors.textTertiary,
-              fontSize: 12,
-              marginTop: 2,
-              fontWeight: '500',
-            }}
-          >
-            {dueText}
-          </Text>
-        ) : null}
-      </View>
-      <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
-    </Pressable>
-  );
-}
-
-function todayLabel(): string {
-  return new Date().toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  });
-}
-
-function shortDate(ts: number): string {
-  return new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-}
-
-function formatDue(ts: number, now: number): string {
-  const diffMin = Math.round((ts - now) / 60_000);
-  if (diffMin < -60 * 24) return `${Math.abs(Math.round(diffMin / (60 * 24)))}d late`;
-  if (diffMin < -60) return `${Math.abs(Math.round(diffMin / 60))}h late`;
-  if (diffMin < 0) return `${Math.abs(diffMin)}m late`;
-  if (diffMin < 60) return `In ${diffMin}m`;
-  if (diffMin < 60 * 24) return `In ${Math.round(diffMin / 60)}h`;
-  return shortDate(ts);
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1200,11 +837,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 12,
-  },
-  statCard: {
-    flex: 1,
-    padding: 16,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   sectionHeader: {
     flexDirection: 'row',

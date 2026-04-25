@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar, StyleSheet } from 'react-native';
 import { ThemeProvider, useTheme } from '@/presentation/theme/ThemeProvider';
+import { ErrorBoundary } from '@/presentation/components/ErrorBoundary';
 import { MD3DarkTheme, MD3LightTheme, PaperProvider } from 'react-native-paper';
 
 function AppShell() {
@@ -52,11 +53,13 @@ function AppShell() {
         backgroundColor={theme.colors.background}
       />
       <PaperProvider theme={paperTheme}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="project/[id]" />
-          <Stack.Screen name="task/[id]" />
-        </Stack>
+        <ErrorBoundary>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="project/[id]" />
+            <Stack.Screen name="task/[id]" />
+          </Stack>
+        </ErrorBoundary>
       </PaperProvider>
     </SafeAreaProvider>
   );

@@ -9,6 +9,7 @@ const settingsStore = create<Settings>(() => {
   return { theme: stored?.theme ?? 'system' };
 });
 
+/** Single-row settings store. Defaults to `system` theme on first launch. */
 export class MmkvSettingsRepository implements SettingsRepository {
   getSettings(): Settings {
     return settingsStore.getState();

@@ -1,6 +1,10 @@
 import type { TaskRepository } from '@/domain/ports/TaskRepository';
 import type { HistoryBus } from '@/domain/ports/HistoryBus';
 
+/**
+ * Removes a task. The full task object is captured by the undo closure so
+ * subtasks, due date, and position are all restored if the user undoes.
+ */
 export class DeleteTask {
   constructor(
     private readonly tasks: TaskRepository,

@@ -4,6 +4,7 @@ import type { IdGenerator } from '@/domain/ports/IdGenerator';
 import type { Clock } from '@/domain/ports/Clock';
 import { createSubtask } from '@/domain/entities/Subtask';
 
+/** Appends a subtask to a task. New subtasks always start uncompleted. */
 export class AddSubtask {
   constructor(
     private readonly tasks: TaskRepository,

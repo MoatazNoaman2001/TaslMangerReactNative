@@ -2,6 +2,7 @@ import type { TaskRepository } from '@/domain/ports/TaskRepository';
 import type { HistoryBus } from '@/domain/ports/HistoryBus';
 import type { Clock } from '@/domain/ports/Clock';
 
+/** Removes one subtask while preserving the order of the rest. */
 export class RemoveSubtask {
   constructor(
     private readonly tasks: TaskRepository,

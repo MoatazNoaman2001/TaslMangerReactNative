@@ -1,6 +1,11 @@
 import type { ProjectRepository } from '@/domain/ports/ProjectRepository';
 import type { HistoryBus } from '@/domain/ports/HistoryBus';
 
+/**
+ * Removes a project. Tasks belonging to the project are not cascaded here —
+ * they're filtered out at query time, which keeps undo simple (the project
+ * row alone is enough to restore on undo).
+ */
 export class DeleteProject {
   constructor(
     private readonly projects: ProjectRepository,

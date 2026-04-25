@@ -1,3 +1,12 @@
+/**
+ * Composition root.
+ *
+ * The single place where concrete adapters (MMKV repositories, system clock,
+ * UUID generator, in-memory history bus) are wired into the use cases that
+ * the UI consumes. Every layer above this file depends only on the port
+ * interfaces in `domain/ports`, which is what makes the use cases swappable
+ * and testable in isolation.
+ */
 import { SystemClock } from '@/data/system/SystemClock';
 import { UuidV7Generator } from '@/data/system/UuidV7Generator';
 import { MmkvTaskRepository } from '@/data/persistence/MmkvTaskRepository';

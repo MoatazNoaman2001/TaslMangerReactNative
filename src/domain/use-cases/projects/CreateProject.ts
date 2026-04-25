@@ -9,6 +9,11 @@ export const PROJECT_COLORS = [
   '#8B5CF6', '#F5C518', '#3B82F6', '#10B981',
 ];
 
+/**
+ * Creates a project. If no colour is supplied, the next swatch in
+ * `PROJECT_COLORS` is picked by index so adjacent new projects get distinct
+ * accents instead of all being orange.
+ */
 export class CreateProject {
   constructor(
     private readonly projects: ProjectRepository,

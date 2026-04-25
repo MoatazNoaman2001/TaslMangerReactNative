@@ -7,6 +7,10 @@ export interface UpdateProjectPatch {
   color?: string;
 }
 
+/**
+ * Combined edit (name + colour). Returns early when the patch produces no
+ * effective change so that no-op edits never enter the undo stack.
+ */
 export class UpdateProject {
   constructor(
     private readonly projects: ProjectRepository,

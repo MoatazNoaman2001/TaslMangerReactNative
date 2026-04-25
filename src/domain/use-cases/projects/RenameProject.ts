@@ -2,6 +2,11 @@ import type { ProjectRepository } from '@/domain/ports/ProjectRepository';
 import type { HistoryBus } from '@/domain/ports/HistoryBus';
 import type { Clock } from '@/domain/ports/Clock';
 
+/**
+ * Name-only edit. Kept separate from {@link UpdateProject} because the menu
+ * sometimes wants a single-purpose action (rename) without offering the
+ * colour picker.
+ */
 export class RenameProject {
   constructor(
     private readonly projects: ProjectRepository,

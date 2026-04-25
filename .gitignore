@@ -31,6 +31,8 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
+.env.*
 .env*.local
 
 # typescript
@@ -40,5 +42,22 @@ yarn-error.*
 /ios
 /android
 
-# generative ai 
+# generative ai
 .claude
+
+# editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# tests / coverage
+coverage/
+
+# misc dumps
+*.dump
+*.code-dump
+src/project-code-dump.txt

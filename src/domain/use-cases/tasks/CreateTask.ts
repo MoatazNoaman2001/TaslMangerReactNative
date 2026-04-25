@@ -13,6 +13,11 @@ export interface CreateTaskInput {
   dueDate?: number | null;
 }
 
+/**
+ * Creates a task in the To-Do column. New tasks are appended at the end of
+ * the column (`position = current todo count`) so they appear at the bottom
+ * of the kanban list. Wrapped in a Command so the create can be undone.
+ */
 export class CreateTask {
   constructor(
     private readonly tasks: TaskRepository,

@@ -22,17 +22,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return resolved === 'dark' ? darkTheme : lightTheme;
   }, [preference, systemScheme]);
 
-  const setPreference = useCallback((p: ThemePreference) => {
-    useCases.setThemePreference.execute(p);
-  }, []);
-
   const value = useMemo<ThemeContextValue>(
     () => ({
       theme,
       preference,
       setPreference: (p) => useCases.setThemePreference.execute(p),
     }),
-    [theme, preference, setPreference],
+    [theme, preference],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

@@ -10,6 +10,11 @@ export interface UpdateTaskPatch {
   dueDate?: number | null;
 }
 
+/**
+ * Patches editable fields on a task (title, description, priority, due date).
+ * Captures the full before/after snapshot for undo so partial-field edits
+ * can still be cleanly reversed.
+ */
 export class UpdateTaskDetails {
   constructor(
     private readonly tasks: TaskRepository,

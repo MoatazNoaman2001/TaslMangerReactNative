@@ -2,6 +2,8 @@ import type { TaskRepository } from '@/domain/ports/TaskRepository';
 import type { HistoryBus } from '@/domain/ports/HistoryBus';
 import type { Clock } from '@/domain/ports/Clock';
 
+/** Flips a subtask's completion. The whole parent task is rewritten because
+ *  subtasks live inline on the task entity. */
 export class ToggleSubtask {
   constructor(
     private readonly tasks: TaskRepository,

@@ -17,6 +17,11 @@ function persist(tasks: Task[]): void {
   writeStorage(STORAGE_KEYS.tasks, { version: 1, tasks });
 }
 
+/**
+ * MMKV-backed task store. Each mutating method updates the Zustand cache
+ * (so React components re-render) and then persists the new array to MMKV.
+ * `useTaskCache` is exported so screens can subscribe with a selector.
+ */
 export class MmkvTaskRepository implements TaskRepository {
   findById(id: string): Task | undefined {
     return taskStore.getState().tasks.find((t) => t.id === id);

@@ -2,6 +2,11 @@ import { create } from 'zustand';
 import type { Command } from '@/domain/ports/Command';
 import type { HistoryBus } from '@/domain/ports/HistoryBus';
 
+/**
+ * Cap on retained commands. Past this size the oldest command is dropped on
+ * push — keeps memory bounded if the user makes a long sequence of edits
+ * without ever undoing.
+ */
 const MAX_HISTORY = 50;
 
 interface HistoryState {
@@ -14,6 +19,11 @@ const historyStore = create<HistoryState>(() => ({
   redoStack: [],
 }));
 
+/**
+ * Two-stack undo/redo bus backed by a Zustand store, so the UI can
+ * subscribe via `useHistoryCache` to enable/disable undo/redo buttons
+ * without polling.
+ */
 export class InMemoryHistoryBus implements HistoryBus {
   push(cmd: Command): void {
     cmd.execute();

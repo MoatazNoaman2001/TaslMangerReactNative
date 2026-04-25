@@ -17,6 +17,7 @@ function persist(projects: Project[]): void {
   writeStorage(STORAGE_KEYS.projects, { version: 1, projects });
 }
 
+/** MMKV-backed project store. Mirrors {@link MmkvTaskRepository}. */
 export class MmkvProjectRepository implements ProjectRepository {
   findById(id: string): Project | undefined {
     return projectStore.getState().projects.find((p) => p.id === id);

@@ -10,6 +10,11 @@ const LABEL_FOR_STATUS: Record<TaskStatus, string> = {
   done: 'Complete',
 };
 
+/**
+ * Moves a task between kanban columns. Sets `completedAt` when the target is
+ * `done` and clears it on any other move, so completion timestamps stay
+ * truthful through reopen/redo cycles.
+ */
 export class ChangeTaskStatus {
   constructor(
     private readonly tasks: TaskRepository,
