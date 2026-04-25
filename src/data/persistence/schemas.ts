@@ -33,9 +33,6 @@ export const ProjectSchema = z.object({
   updatedAt: z.number().int().positive(),
 });
 
-// TODO: when bumping a stored schema version, add a migration step in the
-// repository constructors so old payloads are upgraded instead of silently
-// dropped.
 export const StoredProjectsSchema = z.object({
   version: z.literal(1),
   projects: z.array(ProjectSchema),

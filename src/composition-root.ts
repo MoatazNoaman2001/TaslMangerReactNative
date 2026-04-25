@@ -17,6 +17,7 @@ import { RemoveSubtask } from '@/domain/use-cases/tasks/RemoveSubtask';
 import { CreateProject } from '@/domain/use-cases/projects/CreateProject';
 import { DeleteProject } from '@/domain/use-cases/projects/DeleteProject';
 import { RenameProject } from '@/domain/use-cases/projects/RenameProject';
+import { UpdateProject } from '@/domain/use-cases/projects/UpdateProject';
 
 import { Undo } from '@/domain/use-cases/history/Undo';
 import { Redo } from '@/domain/use-cases/history/Redo';
@@ -45,6 +46,7 @@ export const useCases = {
   createProject: new CreateProject(projects, history, ids, clock),
   deleteProject: new DeleteProject(projects, history),
   renameProject: new RenameProject(projects, history, clock),
+  updateProject: new UpdateProject(projects, history, clock),
 
   undo: new Undo(history),
   redo: new Redo(history),

@@ -4,9 +4,9 @@ import type { HistoryBus } from '@/domain/ports/HistoryBus';
 import type { IdGenerator } from '@/domain/ports/IdGenerator';
 import type { Clock } from '@/domain/ports/Clock';
 
-const PROJECT_COLORS = [
-  '#6366F1', '#10B981', '#F59E0B', '#EF4444',
-  '#3B82F6', '#EC4899', '#8B5CF6', '#14B8A6',
+export const PROJECT_COLORS = [
+  '#FF6B35', '#C5F277', '#5EE7DF', '#FF3D77',
+  '#8B5CF6', '#F5C518', '#3B82F6', '#10B981',
 ];
 
 export class CreateProject {
@@ -17,15 +17,16 @@ export class CreateProject {
     private readonly clock: Clock,
   ) {}
 
-  execute(name: string): Project {
+  execute(name: string, color?: string): Project {
     const existing = this.projects.findAll().length;
-    const color = PROJECT_COLORS[existing % PROJECT_COLORS.length]!;
+    const resolvedColor =
+      color ?? PROJECT_COLORS[existing % PROJECT_COLORS.length]!;
     const ts = this.clock.now();
 
     const project: Project = {
       id: this.ids.next(),
       name: name.trim(),
-      color,
+      color: resolvedColor,
       createdAt: ts,
       updatedAt: ts,
     };
