@@ -71,7 +71,7 @@ export default function TaskDetailsScreen() {
         if (!task) return;
         setTitleDraft(task.title);
         setDescriptionDraft(task.description);
-    }, [task?.id, task?.title, task?.description]);
+    }, [task?.id]);
 
     const commitTitle = useCallback(() => {
         if (!task) return;
@@ -265,7 +265,11 @@ export default function TaskDetailsScreen() {
                         textColor={theme.colors.textInverse}
                         style={{ borderRadius: theme.radius.round, marginRight: theme.spacing.sm }}
                         labelStyle={{ fontWeight: '700', marginHorizontal: 14 }}
-                        onPress={() => router.back()}
+                        onPress={() => {
+                            commitTitle();
+                            commitDescription();
+                            router.back();
+                        }}
                     >
                         Done
                     </Button>
